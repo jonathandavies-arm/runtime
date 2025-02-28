@@ -962,6 +962,26 @@ bool OptBoolsDsc::optOptimizeRangeTests()
 //
 bool OptBoolsDsc::optOptimizeCompareChainCondBlock()
 {
+    if (m_comp->verbose) {
+        JITDUMP("optOptimizeCompareChainCondBlock");
+    }
+
+    JITDUMP("--- m_b1 ---");
+    m_comp->fgDumpBlock(m_b1);
+    JITDUMP("\n");
+    JITDUMP("--- m_b2 ---");
+    m_comp->fgDumpBlock(m_b2);
+    JITDUMP("\n");
+    JITDUMP("--- m_b3");
+    if (m_b3) {
+        JITDUMP(" ---");
+        m_comp->fgDumpBlock(m_b3);
+        JITDUMP("\n");
+    } else {
+        JITDUMP(" nullptr ---\n")
+    }
+    JITDUMP("------\n")
+
     assert((m_b1 != nullptr) && (m_b2 != nullptr));
     m_t3 = nullptr;
 
@@ -1037,6 +1057,17 @@ bool OptBoolsDsc::optOptimizeCompareChainCondBlock()
         int maxOp1Cost = op1IsCondChain ? 31 : 10;
         int maxOp2Cost = op2IsCondChain ? 31 : 10;
 
+        if (op1Cost > 7) {
+            JITDUMP("opCost (1) %d\n", op1Cost);
+            DISPTREE(cond1);
+            JITDUMP("---\n");
+        }
+        if (op2Cost > 7) {
+            JITDUMP("opCost (2) %d\n", op2Cost);
+            DISPTREE(cond2);
+            JITDUMP("---\n");
+        }
+
         // Cost to allow for chain size of three.
         if (op1Cost > maxOp1Cost || op2Cost > maxOp2Cost)
         {
@@ -1057,6 +1088,19 @@ bool OptBoolsDsc::optOptimizeCompareChainCondBlock()
         assert(cond1 == revCond); // Ensure `gtReverseCond` did not create a new node.
     }
 
+    JITDUMP("cond2\n");
+    DISPTREE(cond2);
+    JITDUMP("\n");
+    
+    // if (m_b3 != nullptr) {
+    //     GenTree* revCond = m_comp->gtReverseCond(cond2);
+    //     assert(cond2 == revCond);
+    //     JITDUMP("cond2\n");
+    //     DISPTREE(cond2);
+    //     JITDUMP("\n");
+    // }
+
+
     // Join the two conditions together
     genTreeOps chainedOper       = foundEndOfOrConditions ? GT_AND : GT_OR;
     GenTree*   chainedConditions = m_comp->gtNewOperNode(chainedOper, TYP_INT, cond1, cond2);
@@ -1064,9 +1108,16 @@ bool OptBoolsDsc::optOptimizeCompareChainCondBlock()
     cond2->gtFlags &= ~GTF_RELOP_JMP_USED;
     chainedConditions->gtFlags |= (GTF_RELOP_JMP_USED | GTF_DONT_CSE);
 
+    JITDUMP("chainedConditions\n");
+    DISPTREE(chainedConditions);
+    
     // Add a test condition onto the front of the chain
     GenTree* testcondition =
-        m_comp->gtNewOperNode(GT_NE, TYP_INT, chainedConditions, m_comp->gtNewZeroConNode(TYP_INT));
+    m_comp->gtNewOperNode(GT_NE, TYP_INT, chainedConditions, m_comp->gtNewZeroConNode(TYP_INT));
+    
+    JITDUMP("testcondition\n");
+    DISPTREE(testcondition);
+
 
     // Wire the chain into the second block
     m_testInfo2.SetTestOp(testcondition);
@@ -1087,7 +1138,9 @@ bool OptBoolsDsc::optOptimizeCompareChainCondBlock()
     m_b2->CopyFlags(m_b1, BBF_COPY_PROPAGATE);
 
     // Join the two blocks. This is done now to ensure that additional conditions can be chained.
-    if (m_comp->fgCanCompactBlock(m_b1))
+    bool res = m_comp->fgCanCompactBlock(m_b1);
+    JITDUMP("m_comp->fgCanCompactBlock(m_b1) %d\n", res);
+    if (res)
     {
         m_comp->fgCompactBlock(m_b1);
     }
@@ -2016,6 +2069,8 @@ PhaseStatus Compiler::optOptimizeBools()
                 }
 #ifdef TARGET_ARM64
                 else if (optBoolsDsc.optOptimizeCompareChainCondBlock())
+                //     JITDUMP("optOptimizeCompareChainCondBlock()\n");
+                // if ()
                 {
                     // The optimization will have merged b1 and b2. Retry the loop so that
                     // b1 and b2->bbNext can be tested.
@@ -2023,6 +2078,7 @@ PhaseStatus Compiler::optOptimizeBools()
                     retry  = true;
                     numCond++;
                 }
+                // }
 #endif
             }
             else

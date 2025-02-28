@@ -75,6 +75,25 @@ namespace TestCompare
                 fail = true;
             }
 
+            // Test if ANDing or GT_NE requires both operands to be boolean
+            // if (!AreOne(1, 1))
+            // {
+            //     Console.WriteLine("CBoolTest:AreOne(1, 1) failed");
+            //     return 101;
+            // }
+
+            // Skip cases where x or y is greater than 1
+            Console.WriteLine("AreOne(1, 1) {0}", AreOne(1, 1));
+            Console.WriteLine("AreOne(3, 1) {0}", AreOne(3, 1));
+            Console.WriteLine("AreOne(1, 3) {0}", AreOne(1, 3));
+            
+            
+            Console.WriteLine("AreOneIf(1, 1) {0}", AreOneIf(1, 1));
+            Console.WriteLine("AreOneIf(3, 1) {0}", AreOneIf(3, 1));
+            Console.WriteLine("AreOneIf(1, 3) {0}", AreOneIf(1, 3));
+            //     return 101;
+            // }
+
             if (fail)
             {
                 return 101;
@@ -212,6 +231,21 @@ namespace TestCompare
             //ARM64-FULL-LINE: ccmp {{w[0-9]+}}, {{w[0-9]+}}, 0, le
             //ARM64-FULL-LINE: cset {{x[0-9]+}}, gt
             return (a < b) && (c <= d) && (e > f);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static bool AreOne(int x, int y)
+        {
+            return (x == 1 && y == 1);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static int AreOneIf(int x, int y)
+        {
+            if (x == 1 && y == 1) {
+                return 1;
+            }
+            return -1;
         }
     }
 }
