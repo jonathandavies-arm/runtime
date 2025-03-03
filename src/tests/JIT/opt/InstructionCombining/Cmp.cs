@@ -83,16 +83,41 @@ namespace TestCompare
             // }
 
             // Skip cases where x or y is greater than 1
-            Console.WriteLine("AreOne(1, 1) {0}", AreOne(1, 1));
-            Console.WriteLine("AreOne(3, 1) {0}", AreOne(3, 1));
-            Console.WriteLine("AreOne(1, 3) {0}", AreOne(1, 3));
+            // Console.WriteLine("AreOne(1, 1) {0}", AreOne(1, 1));
+            // Console.WriteLine("AreOne(3, 1) {0}", AreOne(3, 1));
+            // Console.WriteLine("AreOne(1, 3) {0}", AreOne(1, 3));
             
             
-            Console.WriteLine("AreOneIf(1, 1) {0}", AreOneIf(1, 1));
-            Console.WriteLine("AreOneIf(3, 1) {0}", AreOneIf(3, 1));
-            Console.WriteLine("AreOneIf(1, 3) {0}", AreOneIf(1, 3));
+            // Console.WriteLine("AreOneIf(1, 1) {0}", AreOneIf(1, 1));
+            // Console.WriteLine("AreOneIf(3, 1) {0}", AreOneIf(3, 1));
+            // Console.WriteLine("AreOneIf(1, 3) {0}", AreOneIf(1, 3));
             //     return 101;
             // }
+
+            Console.WriteLine("GtAndGt(1, 1) {0} {1}", GtAndGt(1, 1), GtAndGt(1, 1)==false);
+            Console.WriteLine("GtAndGt(2, 1) {0} {1}", GtAndGt(2, 1), GtAndGt(1, 1)==false);
+            Console.WriteLine("GtAndGt(1, 2) {0} {1}", GtAndGt(1, 2), GtAndGt(1, 1)==false);
+            Console.WriteLine("GtAndGt(2, 2) {0} {1}", GtAndGt(2, 2), GtAndGt(1, 1)==true);
+
+            Console.WriteLine("GtOrGt(1, 1) {0} {1}", GtOrGt(1, 1), GtOrGt(1, 1)==false);
+            Console.WriteLine("GtOrGt(2, 1) {0} {1}", GtOrGt(2, 1), GtOrGt(2, 1)==true);
+            Console.WriteLine("GtOrGt(1, 2) {0} {1}", GtOrGt(1, 2), GtOrGt(1, 2)==true);
+            Console.WriteLine("GtOrGt(2, 2) {0} {1}", GtOrGt(2, 2), GtOrGt(2, 2)==true);
+
+            Console.WriteLine("GtAndLt(1, 1) {0} {1}", GtAndLt(1, 1), GtAndLt(1, 1)==false);
+            Console.WriteLine("GtAndLt(2, 1) {0} {1}", GtAndLt(2, 1), GtAndLt(2, 1)==false);
+            Console.WriteLine("GtAndLt(1, 0) {0} {1}", GtAndLt(1, 0), GtAndLt(1, 0)==false);
+            Console.WriteLine("GtAndLt(2, 0) {0} {1}", GtAndLt(2, 0), GtAndLt(2, 0)==true);
+
+            Console.WriteLine("GtOrLt(1, 1) {0} {1}", GtOrLt(1, 1), GtOrLt(1, 1)==false);
+            Console.WriteLine("GtOrLt(2, 1) {0} {1}", GtOrLt(2, 1), GtOrLt(2, 1)==true);
+            Console.WriteLine("GtOrLt(1, 0) {0} {1}", GtOrLt(1, 0), GtOrLt(1, 0)==true);
+            Console.WriteLine("GtOrLt(2, 0) {0} {1}", GtOrLt(2, 0), GtOrLt(2, 0)==true);
+
+            // GtAndGt(1, 2);
+            // GtOrGt(1, 2);
+            // GtAndLt(1, 2);
+            // GtOrLt(1, 2);
 
             if (fail)
             {
@@ -237,6 +262,30 @@ namespace TestCompare
         private static bool AreOne(int x, int y)
         {
             return (x == 1 && y == 1);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static bool GtAndGt(int x, int y)
+        {
+            return (x > 1 && y > 1);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static bool GtOrGt(int x, int y)
+        {
+            return (x > 1 || y > 1);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static bool GtAndLt(int x, int y)
+        {
+            return (x > 1 && y < 1);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static bool GtOrLt(int x, int y)
+        {
+            return (x > 1 || y < 1);
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
