@@ -1,0 +1,235 @@
+diff --git a/src/coreclr/jit/hwintrinsic.cpp b/src/coreclr/jit/hwintrinsic.cpp
+index ed31f97c1f7..e8ee1c8c850 100644
+--- a/src/coreclr/jit/hwintrinsic.cpp
++++ b/src/coreclr/jit/hwintrinsic.cpp
+@@ -3061,7 +3061,7 @@ GenTree* Compiler::impXplatIntrinsic(NamedIntrinsic        intrinsic,
+     bool leftUpper         = false;
+     bool rightUpper        = false;
+ 
+-#if defined(TARGET_ARM64) || defined(TARGET_XARCH)
++#if defined(TARGET_ARM64)
+     auto vectorFirstArgMatchesSimdSize = [this, sig, simdSize]() {
+         // Vector2/3/4 and the fixed-size Vector64/128 helpers share some method names. Make sure this importer
+         // only handles the generic Vector64<T>/Vector128<T> methods whose first argument has the expected SIMD size.
+@@ -3081,11 +3081,6 @@ GenTree* Compiler::impXplatIntrinsic(NamedIntrinsic        intrinsic,
+ 
+         return varTypeIsSIMD(argType) && (genTypeSize(argType) == simdSize);
+     };
+-#else
+-    auto vectorFirstArgMatchesSimdSize = []() {
+-        return false;
+-    };
+-#endif
+ 
+     auto vectorValueEqualsMask = [this, simdSize](GenTree* vector, GenTree* value, var_types simdBaseType) -> GenTree* {
+         var_types      simdType     = getSIMDTypeForSize(simdSize);
+@@ -3107,61 +3102,24 @@ GenTree* Compiler::impXplatIntrinsic(NamedIntrinsic        intrinsic,
+     };
+ 
+     auto vectorExtractMostSignificantBits = [this, simdSize](GenTree* mask, var_types maskBaseType) -> GenTree* {
+-#if defined(TARGET_XARCH)
+-        NamedIntrinsic extractIntrinsic;
+-
+-        switch (maskBaseType)
+-        {
+-            case TYP_BYTE:
+-            case TYP_UBYTE:
+-                extractIntrinsic = (simdSize == 32) ? NI_AVX2_MoveMask : NI_X86Base_MoveMask;
+-                break;
+-
+-            case TYP_SHORT:
+-            case TYP_USHORT:
+-                return gtNewSimdHWIntrinsicNode(TYP_INT, mask, NI_Vector_ExtractMostSignificantBits, maskBaseType,
+-                                                simdSize);
+-
+-            case TYP_INT:
+-            case TYP_UINT:
+-            case TYP_FLOAT:
+-                maskBaseType     = TYP_FLOAT;
+-                extractIntrinsic = (simdSize == 32) ? NI_AVX_MoveMask : NI_X86Base_MoveMask;
+-                break;
+-
+-            default:
+-                unreached();
+-        }
+-
+-        return gtNewSimdHWIntrinsicNode(TYP_INT, mask, extractIntrinsic, maskBaseType, simdSize);
+-#else
+         return gtNewSimdHWIntrinsicNode(TYP_INT, mask, NI_Vector_ExtractMostSignificantBits, maskBaseType, simdSize);
+-#endif
+     };
+ 
+     auto vectorCountFromMask = [this, &vectorExtractMostSignificantBits](GenTree*  mask,
+                                                                          var_types maskBaseType) -> GenTree* {
+         // Count/IndexOf/LastIndexOf are expressed in terms of a vector compare mask followed by
+-        // ExtractMostSignificantBits. Xarch imports this as MoveMask, while the existing Arm64 rationalization
+-        // recognizes the full pattern and chooses the best mask-count/index sequence.
++        // ExtractMostSignificantBits. The existing Arm64 rationalization recognizes the full pattern
++        // and chooses the best mask-count/index sequence.
+         GenTree* extract = vectorExtractMostSignificantBits(mask, maskBaseType);
+-#if defined(TARGET_XARCH)
+-        return gtNewScalarHWIntrinsicNode(TYP_INT, extract, NI_X86Base_PopCount);
+-#else
+         return new (this, GT_INTRINSIC)
+             GenTreeIntrinsic(TYP_INT, extract, NI_PRIMITIVE_PopCount, nullptr R2RARG(CORINFO_CONST_LOOKUP{IAT_VALUE}));
+-#endif
+     };
+ 
+     auto vectorIndexOfFromMask = [this, &vectorExtractMostSignificantBits](GenTree*  mask,
+                                                                            var_types maskBaseType) -> GenTree* {
+         GenTree* extract = vectorExtractMostSignificantBits(mask, maskBaseType);
+-#if defined(TARGET_XARCH)
+-        GenTree* tzcnt = gtNewScalarHWIntrinsicNode(TYP_INT, extract, NI_AVX2_TrailingZeroCount);
+-#else
+         GenTree* tzcnt = new (this, GT_INTRINSIC) GenTreeIntrinsic(TYP_INT, extract, NI_PRIMITIVE_TrailingZeroCount,
+                                                                    nullptr R2RARG(CORINFO_CONST_LOOKUP{IAT_VALUE}));
+-#endif
+ 
+         // TrailingZeroCount returns 32 for a zero mask. The managed helper returns -1 when no element matched.
+         unsigned tzcntTmp = lvaGrabTemp(true DEBUGARG("Vector IndexOf result"));
+@@ -3180,19 +3138,14 @@ GenTree* Compiler::impXplatIntrinsic(NamedIntrinsic        intrinsic,
+     auto vectorLastIndexOfFromMask = [this, &vectorExtractMostSignificantBits](GenTree*  mask,
+                                                                                var_types maskBaseType) -> GenTree* {
+         GenTree* extract = vectorExtractMostSignificantBits(mask, maskBaseType);
+-#if defined(TARGET_ARM64)
+         GenTree* lzcnt = gtNewScalarHWIntrinsicNode(TYP_INT, extract, NI_ArmBase_LeadingZeroCount);
+-#elif defined(TARGET_XARCH)
+-        GenTree* lzcnt = gtNewScalarHWIntrinsicNode(TYP_INT, extract, NI_AVX2_LeadingZeroCount);
+-#else
+-        GenTree* lzcnt = new (this, GT_INTRINSIC) GenTreeIntrinsic(TYP_INT, extract, NI_PRIMITIVE_LeadingZeroCount,
+-                                                                   nullptr R2RARG(CORINFO_CONST_LOOKUP{IAT_VALUE}));
+-#endif
+         return gtNewOperNode(GT_SUB, TYP_INT, gtNewIconNode(31), lzcnt);
+     };
++#endif // TARGET_ARM64
+ 
+     switch (intrinsic)
+     {
++#if defined(TARGET_ARM64)
+         case NI_Vector_All:
+         {
+             assert(sig->numArgs == 2);
+@@ -3324,12 +3277,6 @@ GenTree* Compiler::impXplatIntrinsic(NamedIntrinsic        intrinsic,
+                 break;
+             }
+ 
+-#if defined(TARGET_XARCH)
+-            if (!compOpportunisticallyDependsOn(InstructionSet_AVX2))
+-            {
+-                break;
+-            }
+-#endif
+ 
+             // Floating-point equality has different semantics from the integer mask comparisons used below.
+             // Leave those cases on the managed fallback path for now.
+@@ -3363,12 +3310,6 @@ GenTree* Compiler::impXplatIntrinsic(NamedIntrinsic        intrinsic,
+                 break;
+             }
+ 
+-#if defined(TARGET_XARCH)
+-            if (!compOpportunisticallyDependsOn(InstructionSet_AVX2))
+-            {
+-                break;
+-            }
+-#endif
+ 
+             if (genTypeSize(getUnsignedSimdBaseType(simdBaseType)) > 4)
+             {
+@@ -3393,12 +3334,6 @@ GenTree* Compiler::impXplatIntrinsic(NamedIntrinsic        intrinsic,
+                 break;
+             }
+ 
+-#if defined(TARGET_XARCH)
+-            if (!compOpportunisticallyDependsOn(InstructionSet_AVX2))
+-            {
+-                break;
+-            }
+-#endif
+ 
+             // Floating-point equality has different semantics from the integer mask comparisons used below.
+             // Leave those cases on the managed fallback path for now.
+@@ -3432,12 +3367,6 @@ GenTree* Compiler::impXplatIntrinsic(NamedIntrinsic        intrinsic,
+                 break;
+             }
+ 
+-#if defined(TARGET_XARCH)
+-            if (!compOpportunisticallyDependsOn(InstructionSet_AVX2))
+-            {
+-                break;
+-            }
+-#endif
+ 
+             if (genTypeSize(getUnsignedSimdBaseType(simdBaseType)) > 4)
+             {
+@@ -3492,6 +3421,7 @@ GenTree* Compiler::impXplatIntrinsic(NamedIntrinsic        intrinsic,
+             retNode = gtNewOperNode(GT_EQ, retType, any, gtNewZeroConNode(retType));
+             break;
+         }
++#endif // TARGET_ARM64
+ 
+         case NI_Vector_Abs:
+         {
+diff --git a/src/coreclr/jit/hwintrinsiclist.h b/src/coreclr/jit/hwintrinsiclist.h
+index 78b4447eb3b..e8c3ef3edfd 100644
+--- a/src/coreclr/jit/hwintrinsiclist.h
++++ b/src/coreclr/jit/hwintrinsiclist.h
+@@ -35,11 +35,15 @@
+ #define FIRST_NI_Vector             NI_Vector_Abs
+ HARDWARE_INTRINSIC(Vector,          Abs,                                                             -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_AvxOnlyCompatible)
+ HARDWARE_INTRINSIC(Vector,          AddSaturate,                                                     -1,             2,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_AvxOnlyCompatible)
++#if defined(TARGET_ARM64)
+ HARDWARE_INTRINSIC(Vector,          All,                                                             -1,             2,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_SpecialImport|HW_Flag_NoCodeGen|HW_Flag_BaseTypeFromFirstArg)
+ HARDWARE_INTRINSIC(Vector,          AllWhereAllBitsSet,                                              -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_SpecialImport|HW_Flag_NoCodeGen|HW_Flag_BaseTypeFromFirstArg)
++#endif // TARGET_ARM64
+ HARDWARE_INTRINSIC(Vector,          AndNot,                                                          -1,             2,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_AvxOnlyCompatible)
++#if defined(TARGET_ARM64)
+ HARDWARE_INTRINSIC(Vector,          Any,                                                             -1,             2,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_SpecialImport|HW_Flag_NoCodeGen|HW_Flag_BaseTypeFromFirstArg)
+ HARDWARE_INTRINSIC(Vector,          AnyWhereAllBitsSet,                                              -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_SpecialImport|HW_Flag_NoCodeGen|HW_Flag_BaseTypeFromFirstArg)
++#endif // TARGET_ARM64
+ HARDWARE_INTRINSIC(Vector,          As,                                                              -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_BaseTypeFromFirstArg|HW_Flag_AvxOnlyCompatible)
+ HARDWARE_INTRINSIC(Vector,          AsByte,                                                          -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_BaseTypeFromFirstArg|HW_Flag_AvxOnlyCompatible)
+ HARDWARE_INTRINSIC(Vector,          AsDouble,                                                        -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_BaseTypeFromFirstArg|HW_Flag_AvxOnlyCompatible)
+@@ -99,8 +103,10 @@ HARDWARE_INTRINSIC(Vector,          ConvertToUInt32,
+ HARDWARE_INTRINSIC(Vector,          ConvertToUInt32Native,                                           -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_BaseTypeFromFirstArg)
+ HARDWARE_INTRINSIC(Vector,          ConvertToUInt64,                                                 -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_BaseTypeFromFirstArg)
+ HARDWARE_INTRINSIC(Vector,          ConvertToUInt64Native,                                           -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_BaseTypeFromFirstArg)
++#if defined(TARGET_ARM64)
+ HARDWARE_INTRINSIC(Vector,          Count,                                                           -1,             2,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_SpecialImport|HW_Flag_NoCodeGen|HW_Flag_BaseTypeFromFirstArg)
+ HARDWARE_INTRINSIC(Vector,          CountWhereAllBitsSet,                                            -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_SpecialImport|HW_Flag_NoCodeGen|HW_Flag_BaseTypeFromFirstArg)
++#endif // TARGET_ARM64
+ #if defined(TARGET_ARM64)
+ HARDWARE_INTRINSIC(Vector,          Create,                                                          -1,            -1,      INS_sve_dup,           INS_sve_dup,            INS_sve_dup,            INS_sve_dup,            INS_sve_dup,            INS_sve_dup,            INS_sve_dup,            INS_sve_dup,            INS_sve_dup,            INS_sve_dup,           -1,        -1,         HW_Category_Helper,                 HW_Flag_SpecialImport|HW_Flag_SpecialCodeGen|HW_Flag_Scalable)
+ #else
+@@ -152,8 +158,10 @@ HARDWARE_INTRINSIC(Vector,          GreaterThanOrEqual,
+ HARDWARE_INTRINSIC(Vector,          GreaterThanOrEqualAll,                                           -1,             2,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_BaseTypeFromFirstArg)
+ HARDWARE_INTRINSIC(Vector,          GreaterThanOrEqualAny,                                           -1,             2,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_BaseTypeFromFirstArg)
+ 
++#if defined(TARGET_ARM64)
+ HARDWARE_INTRINSIC(Vector,          IndexOf,                                                         -1,             2,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_SpecialImport|HW_Flag_NoCodeGen|HW_Flag_BaseTypeFromFirstArg)
+ HARDWARE_INTRINSIC(Vector,          IndexOfWhereAllBitsSet,                                          -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_SpecialImport|HW_Flag_NoCodeGen|HW_Flag_BaseTypeFromFirstArg)
++#endif // TARGET_ARM64
+ HARDWARE_INTRINSIC(Vector,          IsEvenInteger,                                                   -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId)
+ HARDWARE_INTRINSIC(Vector,          IsFinite,                                                        -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_AvxOnlyCompatible)
+ HARDWARE_INTRINSIC(Vector,          IsInfinity,                                                      -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_AvxOnlyCompatible)
+@@ -167,8 +175,10 @@ HARDWARE_INTRINSIC(Vector,          IsPositive,
+ HARDWARE_INTRINSIC(Vector,          IsPositiveInfinity,                                              -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_AvxOnlyCompatible)
+ HARDWARE_INTRINSIC(Vector,          IsSubnormal,                                                     -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_AvxOnlyCompatible)
+ HARDWARE_INTRINSIC(Vector,          IsZero,                                                          -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_AvxOnlyCompatible)
++#if defined(TARGET_ARM64)
+ HARDWARE_INTRINSIC(Vector,          LastIndexOf,                                                     -1,             2,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_SpecialImport|HW_Flag_NoCodeGen|HW_Flag_BaseTypeFromFirstArg)
+ HARDWARE_INTRINSIC(Vector,          LastIndexOfWhereAllBitsSet,                                      -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_SpecialImport|HW_Flag_NoCodeGen|HW_Flag_BaseTypeFromFirstArg)
++#endif // TARGET_ARM64
+ HARDWARE_INTRINSIC(Vector,          LessThan,                                                        -1,             2,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_BaseTypeFromFirstArg|HW_Flag_AvxOnlyCompatible)
+ HARDWARE_INTRINSIC(Vector,          LessThanAll,                                                     -1,             2,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_BaseTypeFromFirstArg)
+ HARDWARE_INTRINSIC(Vector,          LessThanAny,                                                     -1,             2,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_BaseTypeFromFirstArg)
+@@ -197,8 +207,10 @@ HARDWARE_INTRINSIC(Vector,          NarrowWithSaturation,
+ HARDWARE_INTRINSIC(Vector,          NarrowWithSaturation,                                            -1,             2,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_BaseTypeFromFirstArg|HW_Flag_AvxOnlyCompatible)
+ #endif
+ 
++#if defined(TARGET_ARM64)
+ HARDWARE_INTRINSIC(Vector,          None,                                                            -1,             2,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_SpecialImport|HW_Flag_NoCodeGen|HW_Flag_BaseTypeFromFirstArg)
+ HARDWARE_INTRINSIC(Vector,          NoneWhereAllBitsSet,                                             -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_SpecialImport|HW_Flag_NoCodeGen|HW_Flag_BaseTypeFromFirstArg)
++#endif // TARGET_ARM64
+ HARDWARE_INTRINSIC(Vector,          Reverse,                                                         -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId)
+ HARDWARE_INTRINSIC(Vector,          Round,                                                           -1,            -1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_AvxOnlyCompatible)
+ HARDWARE_INTRINSIC(Vector,          ShiftLeft,                                                       -1,             2,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId)

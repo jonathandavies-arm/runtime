@@ -1,0 +1,150 @@
+diff --git a/src/coreclr/jit/hwintrinsic.cpp b/src/coreclr/jit/hwintrinsic.cpp
+index ed31f97c1f73..9fdf359db409 100644
+--- a/src/coreclr/jit/hwintrinsic.cpp
++++ b/src/coreclr/jit/hwintrinsic.cpp
+@@ -3193,73 +3193,6 @@ GenTree* Compiler::impXplatIntrinsic(NamedIntrinsic        intrinsic,
+ 
+     switch (intrinsic)
+     {
+-        case NI_Vector_All:
+-        {
+-            assert(sig->numArgs == 2);
+-
+-            if (!vectorFirstArgMatchesSimdSize())
+-            {
+-                break;
+-            }
+-
+-            op2 = impPopStack().val;
+-            op1 = impSIMDPopStack();
+-
+-            GenTree* other = gtNewSimdCreateBroadcastNode(getSIMDTypeForSize(simdSize), op2, simdBaseType, simdSize);
+-            retNode        = gtNewSimdCmpOpAllNode(GT_EQ, retType, op1, other, simdBaseType, simdSize);
+-            break;
+-        }
+-
+-        case NI_Vector_AllWhereAllBitsSet:
+-        {
+-            assert(sig->numArgs == 1);
+-
+-            if (!vectorFirstArgMatchesSimdSize())
+-            {
+-                break;
+-            }
+-
+-            var_types maskBaseType = getUnsignedSimdBaseType(simdBaseType);
+-            op1                    = impSIMDPopStack();
+-            retNode = gtNewSimdCmpOpAllNode(GT_EQ, retType, op1, gtNewAllBitsSetConNode(getSIMDTypeForSize(simdSize)),
+-                                            maskBaseType, simdSize);
+-            break;
+-        }
+-
+-        case NI_Vector_Any:
+-        {
+-            assert(sig->numArgs == 2);
+-
+-            if (!vectorFirstArgMatchesSimdSize())
+-            {
+-                break;
+-            }
+-
+-            op2 = impPopStack().val;
+-            op1 = impSIMDPopStack();
+-
+-            retNode = gtNewSimdCmpOpAnyNode(GT_EQ, retType, op1,
+-                                            gtNewSimdCreateBroadcastNode(getSIMDTypeForSize(simdSize), op2,
+-                                                                         simdBaseType, simdSize),
+-                                            simdBaseType, simdSize);
+-            break;
+-        }
+-
+-        case NI_Vector_AnyWhereAllBitsSet:
+-        {
+-            assert(sig->numArgs == 1);
+-
+-            if (!vectorFirstArgMatchesSimdSize())
+-            {
+-                break;
+-            }
+-
+-            op1     = impSIMDPopStack();
+-            retNode = gtNewSimdCmpOpAnyNode(GT_EQ, retType, op1, gtNewAllBitsSetConNode(getSIMDTypeForSize(simdSize)),
+-                                            getUnsignedSimdBaseType(simdBaseType), simdSize);
+-            break;
+-        }
+-
+         case NI_Vector_Count:
+         {
+             assert(sig->numArgs == 2);
+@@ -3453,46 +3386,6 @@ GenTree* Compiler::impXplatIntrinsic(NamedIntrinsic        intrinsic,
+             break;
+         }
+ 
+-        case NI_Vector_None:
+-        {
+-            assert(sig->numArgs == 2);
+-
+-            if (!vectorFirstArgMatchesSimdSize())
+-            {
+-                break;
+-            }
+-
+-            op2 = impPopStack().val;
+-            op1 = impSIMDPopStack();
+-
+-            // Import None(value) as !Any(value) so it benefits from the same compare-mask lowering as Any.
+-            GenTree* any = gtNewSimdCmpOpAnyNode(GT_EQ, retType, op1,
+-                                                 gtNewSimdCreateBroadcastNode(getSIMDTypeForSize(simdSize), op2,
+-                                                                              simdBaseType, simdSize),
+-                                                 simdBaseType, simdSize);
+-            retNode      = gtNewOperNode(GT_EQ, retType, any, gtNewZeroConNode(retType));
+-            break;
+-        }
+-
+-        case NI_Vector_NoneWhereAllBitsSet:
+-        {
+-            assert(sig->numArgs == 1);
+-
+-            if (!vectorFirstArgMatchesSimdSize())
+-            {
+-                break;
+-            }
+-
+-            op1 = impSIMDPopStack();
+-
+-            // Import NoneWhereAllBitsSet as !AnyWhereAllBitsSet for the same reason.
+-            GenTree* any =
+-                gtNewSimdCmpOpAnyNode(GT_EQ, retType, op1, gtNewAllBitsSetConNode(getSIMDTypeForSize(simdSize)),
+-                                      getUnsignedSimdBaseType(simdBaseType), simdSize);
+-            retNode = gtNewOperNode(GT_EQ, retType, any, gtNewZeroConNode(retType));
+-            break;
+-        }
+-
+         case NI_Vector_Abs:
+         {
+             assert(sig->numArgs == 1);
+diff --git a/src/coreclr/jit/hwintrinsiclist.h b/src/coreclr/jit/hwintrinsiclist.h
+index 78b4447eb3bc..0f0d70e4027c 100644
+--- a/src/coreclr/jit/hwintrinsiclist.h
++++ b/src/coreclr/jit/hwintrinsiclist.h
+@@ -35,11 +35,7 @@
+ #define FIRST_NI_Vector             NI_Vector_Abs
+ HARDWARE_INTRINSIC(Vector,          Abs,                                                             -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_AvxOnlyCompatible)
+ HARDWARE_INTRINSIC(Vector,          AddSaturate,                                                     -1,             2,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_AvxOnlyCompatible)
+-HARDWARE_INTRINSIC(Vector,          All,                                                             -1,             2,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_SpecialImport|HW_Flag_NoCodeGen|HW_Flag_BaseTypeFromFirstArg)
+-HARDWARE_INTRINSIC(Vector,          AllWhereAllBitsSet,                                              -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_SpecialImport|HW_Flag_NoCodeGen|HW_Flag_BaseTypeFromFirstArg)
+ HARDWARE_INTRINSIC(Vector,          AndNot,                                                          -1,             2,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_AvxOnlyCompatible)
+-HARDWARE_INTRINSIC(Vector,          Any,                                                             -1,             2,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_SpecialImport|HW_Flag_NoCodeGen|HW_Flag_BaseTypeFromFirstArg)
+-HARDWARE_INTRINSIC(Vector,          AnyWhereAllBitsSet,                                              -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_SpecialImport|HW_Flag_NoCodeGen|HW_Flag_BaseTypeFromFirstArg)
+ HARDWARE_INTRINSIC(Vector,          As,                                                              -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_BaseTypeFromFirstArg|HW_Flag_AvxOnlyCompatible)
+ HARDWARE_INTRINSIC(Vector,          AsByte,                                                          -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_BaseTypeFromFirstArg|HW_Flag_AvxOnlyCompatible)
+ HARDWARE_INTRINSIC(Vector,          AsDouble,                                                        -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_BaseTypeFromFirstArg|HW_Flag_AvxOnlyCompatible)
+@@ -197,8 +193,6 @@ HARDWARE_INTRINSIC(Vector,          NarrowWithSaturation,
+ HARDWARE_INTRINSIC(Vector,          NarrowWithSaturation,                                            -1,             2,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_BaseTypeFromFirstArg|HW_Flag_AvxOnlyCompatible)
+ #endif
+ 
+-HARDWARE_INTRINSIC(Vector,          None,                                                            -1,             2,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_SpecialImport|HW_Flag_NoCodeGen|HW_Flag_BaseTypeFromFirstArg)
+-HARDWARE_INTRINSIC(Vector,          NoneWhereAllBitsSet,                                             -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_SpecialImport|HW_Flag_NoCodeGen|HW_Flag_BaseTypeFromFirstArg)
+ HARDWARE_INTRINSIC(Vector,          Reverse,                                                         -1,             1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId)
+ HARDWARE_INTRINSIC(Vector,          Round,                                                           -1,            -1,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId|HW_Flag_AvxOnlyCompatible)
+ HARDWARE_INTRINSIC(Vector,          ShiftLeft,                                                       -1,             2,      INS_invalid,           INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,            INS_invalid,           -1,        -1,         HW_Category_Helper,                 HW_Flag_InvalidNodeId)

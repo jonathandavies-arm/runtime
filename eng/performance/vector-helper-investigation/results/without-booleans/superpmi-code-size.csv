@@ -1,0 +1,10 @@
+collection,FullOpts_full_pr_delta,FullOpts_without_booleans_delta,MinOpts_full_pr_delta,MinOpts_without_booleans_delta
+aspire.nativeaot.linux.arm64.checked.mch,60,60,0,0
+aspnet2.run.linux.arm64.checked.mch,276,276,0,0
+coreclr_tests.run.linux.arm64.checked.mch,804,804,48,48
+libraries.crossgen2.linux.arm64.checked.mch,0,0,0,0
+libraries.pmi.linux.arm64.checked.mch,-48,-48,0,0
+libraries_tests.run.linux.arm64.Release.mch,15776,15776,21396,11540
+libraries_tests_no_tiered_compilation.run.linux.arm64.Release.mch,1088,260,0,0
+realworld.run.linux.arm64.checked.mch,60,60,0,0
+smoke_tests.nativeaot.linux.arm64.checked.mch,76,76,0,0
